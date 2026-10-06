@@ -73,7 +73,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 font-sans flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-2">Exploding Kittens Engine PoC</h1>
+      <h1 className="text-3xl font-bold mb-2">Exploding Kittens Engine</h1>
       <p className="text-gray-400 mb-6">You are Player: <span className="font-mono text-indigo-400">{myId}</span></p>
       
       {/* Board State */}

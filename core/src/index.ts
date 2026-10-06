@@ -10,6 +10,7 @@ export * from './engine/GameEngine';
 // Export Rules & Expansions
 export * from './expansions/ICardEffect';
 export * from './expansions/base/AttackEffect';
+export * from './expansions/base/SkipEffect';
 
 // Export DeckFactory
 export * from './engine/DeckFactory';
