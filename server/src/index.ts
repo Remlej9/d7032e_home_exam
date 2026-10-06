@@ -1,33 +1,77 @@
+// server/src/index.ts
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { GameEngine, AttackEffect } from 'exploding-kittens-core'; 
 
 const app = express();
 const httpServer = createServer(app);
-
-// Configure Socket.io
 const io = new Server(httpServer, {
-  cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "http://localhost:5173", methods: ["GET", "POST"] }
 });
 
+const serverRandomizer = {
+  shuffle: <T>(array: T[]) => array.sort(() => Math.random() - 0.5),
+  getRandomInt: (max: number) => Math.floor(Math.random() * max)
+};
+
+const serverInputAdapter = {
+  promptTargetSelection: async (actingPlayerId: string, targets: string[]) => targets[0],
+  promptCardSelection: async (actingPlayerId: string, hand: string[]) => hand[0],
+  promptActionInterrupt: async (timeoutMs: number) => false
+};
+
+const engine = new GameEngine(serverRandomizer, serverInputAdapter);
+engine.registerExpansionCard(new AttackEffect());
+
 io.on('connection', (socket) => {
-  const shortId = socket.id.substring(0, 4);
-  console.log(`Client connected: ${shortId}`);
+  // Extract the persistent ID provided by the client
+  const playerId = socket.handshake.query.playerId as string;
+  
+  if (!playerId) {
+    socket.disconnect();
+    return;
+  }
 
-  // Broadcast to all clients that someone joined
-  io.emit('serverMessage', `Player ${shortId} joined the lobby.`);
+  console.log(`Client connected: ${playerId} (Socket: ${socket.id})`);
 
-  // Listen for actions from the connected client and broadcast them
-  socket.on('clientMessage', (msg) => {
-    console.log(`Received from ${shortId}: ${msg}`);
-    io.emit('serverMessage', `Player ${shortId} says: ${msg}`);
+  // Add player to engine
+  const state = engine.addPlayer(playerId);
+  
+  // Send current state to the connecting client
+  socket.emit('gameState', state);
+
+  socket.on('startGame', () => {
+    try {
+      engine.startGame();
+      io.emit('gameState', engine.getSnapshot());
+      io.emit('serverMessage', 'The game has started!');
+    } catch (e: any) {
+      socket.emit('serverMessage', `Error: ${e.message}`);
+    }
+  });
+
+  socket.on('passTurn', async () => {
+    try {
+      const newState = await engine.passTurn(playerId);
+      io.emit('gameState', newState);
+      io.emit('serverMessage', `Player ${playerId} drew a card and passed their turn.`);
+    } catch (e: any) {
+      socket.emit('serverMessage', `Error: ${e.message}`);
+    }
+  });
+
+  socket.on('playCard', async (cardId: string) => {
+    try {
+      const newState = await engine.playCard(playerId, cardId);
+      io.emit('gameState', newState);
+    } catch (e: any) {
+      socket.emit('serverMessage', `Error: ${e.message}`);
+    }
   });
 
   socket.on('disconnect', () => {
-    io.emit('serverMessage', `Player ${shortId} disconnected.`);
+    console.log(`Client disconnected: ${playerId}`);
   });
 });
 

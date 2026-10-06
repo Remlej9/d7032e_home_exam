@@ -1,44 +1,148 @@
+// client/src/App.tsx
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-// Initialize socket outside the component to prevent reconnections on render
-const socket: Socket = io('http://localhost:3000');
+// Retrieve or generate a persistent Player ID
+const getPersistentId = () => {
+  let id = localStorage.getItem('exploding_kittens_id');
+  if (!id) {
+    id = Math.random().toString(36).substring(2, 6).toUpperCase();
+    localStorage.setItem('exploding_kittens_id', id);
+  }
+  return id;
+};
+
+const persistentId = getPersistentId();
+
+// Pass the ID in the socket connection query
+const socket: Socket = io('http://localhost:3000', {
+  query: { playerId: persistentId }
+});
+
+interface Card {
+  id: string;
+  type: string;
+  name: string;
+}
+
+interface Player {
+  id: string;
+  hand: Card[];
+  hasExploded: boolean;
+}
+
+interface GameState {
+  players: Player[];
+  deckCount: number;
+  discardCount: number;
+  currentPlayer: string;
+  turnsRemaining: number;
+  hasStarted: boolean;
+}
 
 export default function App() {
   const [messages, setMessages] = useState<string[]>([]);
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  
+  // Initialize state directly with the persistent ID
+  const [myId] = useState<string>(persistentId);
 
   useEffect(() => {
     socket.on('serverMessage', (msg: string) => {
       setMessages((prev) => [...prev, msg]);
     });
 
+    socket.on('gameState', (state: GameState) => {
+      setGameState(state);
+    });
+
     return () => {
       socket.off('serverMessage');
+      socket.off('gameState');
     };
   }, []);
 
-  const sendPing = () => {
-    socket.emit('clientMessage', 'Hello World!');
-  };
+  const startGame = () => socket.emit('startGame');
+  const passTurn = () => socket.emit('passTurn');
+  const playCard = (cardId: string) => socket.emit('playCard', cardId);
+
+  if (!gameState) return <div className="p-8 text-white">Connecting to server...</div>;
+
+  const me = gameState.players.find(p => p.id === myId);
+  const isMyTurn = gameState.currentPlayer === myId;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 font-sans flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-6">Exploding Kittens</h1>
+      <h1 className="text-3xl font-bold mb-2">Exploding Kittens Engine PoC</h1>
+      <p className="text-gray-400 mb-6">You are Player: <span className="font-mono text-indigo-400">{myId}</span></p>
       
-      <button 
-        onClick={sendPing}
-        className="bg-indigo-600 hover:bg-indigo-500 transition-colors text-white font-bold py-2 px-6 rounded-lg mb-8"
-      >
-        Send Ping
-      </button>
+      {/* Board State */}
+      <div className="flex gap-8 mb-8 text-lg font-bold bg-gray-800 p-6 rounded-xl border border-gray-700 w-full max-w-3xl justify-between">
+        <div>
+          <div className="text-sm text-gray-400">Status</div>
+          {gameState.hasStarted ? (
+            <span className="text-green-400">Active Game</span>
+          ) : (
+            <span className="text-yellow-400">Waiting in Lobby</span>
+          )}
+        </div>
+        <div>
+          <div className="text-sm text-gray-400">Players</div>
+          {gameState.players.length} / 5
+        </div>
+        <div>
+          <div className="text-sm text-gray-400">Draw Pile</div>
+          {gameState.deckCount} cards
+        </div>
+        <div>
+          <div className="text-sm text-gray-400">Current Turn</div>
+          <span className={isMyTurn ? "text-indigo-400" : ""}>
+            {gameState.currentPlayer || 'None'}
+          </span>
+        </div>
+      </div>
       
-      <div className="w-full max-w-2xl bg-gray-800 p-4 rounded-xl shadow-lg min-h-[300px]">
-        <h2 className="text-gray-400 font-semibold mb-3 border-b border-gray-700 pb-2">Network Log</h2>
+      {/* Controls */}
+      <div className="flex gap-4 mb-8">
+        {!gameState.hasStarted && (
+          <button onClick={startGame} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+            Start Game
+          </button>
+        )}
+        {gameState.hasStarted && isMyTurn && !me?.hasExploded && (
+          <button onClick={passTurn} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+            Pass (Draw Card)
+          </button>
+        )}
+      </div>
+
+      {/* Player Hand */}
+      {gameState.hasStarted && me && (
+        <div className="w-full max-w-4xl mb-8">
+          <h2 className="text-xl font-bold mb-4">Your Hand {me.hasExploded && <span className="text-red-500">(EXPLODED)</span>}</h2>
+          <div className="flex flex-wrap gap-4">
+            {me.hand.map((card) => (
+              <div key={card.id} className="bg-gray-800 border border-gray-600 p-4 rounded-lg w-40 flex flex-col items-center shadow-lg">
+                <div className="text-center font-semibold mb-4 text-sm h-10">{card.name}</div>
+                <button 
+                  onClick={() => playCard(card.id)}
+                  disabled={!isMyTurn || me.hasExploded || card.type === 'Defuse'}
+                  className="mt-auto bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold py-2 px-4 rounded w-full transition-colors"
+                >
+                  Play
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Network Log */}
+      <div className="w-full max-w-4xl bg-gray-800 p-4 rounded-xl shadow-lg min-h-[200px] max-h-[300px] overflow-y-auto">
+        <h2 className="text-gray-400 font-semibold mb-3 border-b border-gray-700 pb-2">Event Log</h2>
         <div className="flex flex-col gap-1">
           {messages.map((m, i) => (
-            <div key={i} className="font-mono text-sm text-green-400">
-              {m}
-            </div>
+            <div key={i} className="font-mono text-sm text-green-400">{m}</div>
           ))}
         </div>
       </div>

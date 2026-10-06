@@ -1,16 +1,18 @@
 {
-  "name": "core",
+  "name": "exploding-kittens-core",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "watch": "tsc -w"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "dependencies": {
+    "uuid": "^14.0.2"
+  },
   "devDependencies": {
     "@types/jest": "^30.0.0",
+    "@types/uuid": "^10.0.0",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.14",
     "typescript": "^7.0.2"
