@@ -18,6 +18,8 @@ const serverRandomizer = {
 const serverInputAdapter = {
   promptTargetSelection: async (actingPlayerId: string, targets: string[]) => targets[0],
   promptCardSelection: async (actingPlayerId: string, hand: string[]) => hand[0],
+  promptRearrangeCards: async (actingPlayerId: string, cards: string[]) => cards,
+  promptDeckInstertion: async (actingPlayerId: string, maxIndex: number) => [0],
   promptActionInterrupt: async (timeoutMs: number) => false
 };
 
