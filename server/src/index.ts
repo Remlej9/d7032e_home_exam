@@ -2,7 +2,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { GameEngine, AttackEffect, SkipEffect } from 'exploding-kittens-core'; 
+import { GameEngine, AttackEffect, SkipEffect, ShuffleEffect } from 'exploding-kittens-core'; 
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,6 +25,7 @@ const engine = new GameEngine(serverRandomizer, serverInputAdapter);
 
 engine.registerExpansionCard(new AttackEffect());
 engine.registerExpansionCard(new SkipEffect());
+engine.registerExpansionCard(new ShuffleEffect());
 
 io.on('connection', (socket) => {
   // Extract the persistent ID provided by the client

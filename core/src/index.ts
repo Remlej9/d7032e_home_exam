@@ -11,6 +11,7 @@ export * from './engine/GameEngine';
 export * from './expansions/ICardEffect';
 export * from './expansions/base/AttackEffect';
 export * from './expansions/base/SkipEffect';
+export * from './expansions/base/ShuffleEffect';
 
 // Export DeckFactory
 export * from './engine/DeckFactory';

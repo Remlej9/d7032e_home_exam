@@ -52,7 +52,7 @@ export class GameEngine {
     // Final shuffle
     this.state.drawPile = this.random.shuffle(deck);
 
-    //'Random player goes first
+    // Random player goes first
     this.state.currentPlayerIndex = this.random.getRandomInt(this.state.players.length);
     this.hasStarted = true;
   }
