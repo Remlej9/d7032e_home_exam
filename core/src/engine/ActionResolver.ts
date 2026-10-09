@@ -18,7 +18,14 @@ export class ActionResolver {
       return;
     }
 
-    // TODO: implement the 5 second nope window
+    const wasNoped = await context.input.promptActionInterrupt(5000);
+
+    if (wasNoped) {
+      // If the action was noped, we return without executing the effect
+      return;
+    }
+
+    // If the action was not noped, we execute the effect
     await effect.execute(context);
   }
 }

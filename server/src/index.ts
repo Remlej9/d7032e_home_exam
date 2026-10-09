@@ -23,7 +23,14 @@ const serverInputAdapter = {
   promptActionInterrupt: async (timeoutMs: number) => false
 };
 
-const engine = new GameEngine(serverRandomizer, serverInputAdapter);
+const engine = new GameEngine(serverRandomizer, serverInputAdapter, (state) => {
+  io.emit('gameState', state);
+
+  if (state.pendingAction) {
+    const status = state.pendingAction.nopeCount % 2 === 0 ? "ACTION PENDING" : "ACTION NOPED";
+    io.emit('serverMessage', `5-second interrupt window. Status: ${status}`);
+  }
+});
 
 engine.registerExpansionCard(new AttackEffect());
 engine.registerExpansionCard(new SkipEffect());

@@ -38,12 +38,13 @@ interface GameState {
   currentPlayer: string;
   turnsRemaining: number;
   hasStarted: boolean;
+  pendingAction: { cardType: string; nopeCount: number } | null;
 }
 
 export default function App() {
   const [messages, setMessages] = useState<string[]>([]);
   const [gameState, setGameState] = useState<GameState | null>(null);
-  
+
   // Initialize state directly with the persistent ID
   const [myId] = useState<string>(persistentId);
 
@@ -70,6 +71,9 @@ export default function App() {
 
   const me = gameState.players.find(p => p.id === myId);
   const isMyTurn = gameState.currentPlayer === myId;
+
+  const isInterruptActive = gameState.pendingAction !== null;
+  const isActionNoped = isInterruptActive && (gameState.pendingAction!.nopeCount % 2 !== 0);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 font-sans flex flex-col items-center">
@@ -118,24 +122,43 @@ export default function App() {
 
       {/* Player Hand */}
       {gameState.hasStarted && me && (
-        <div className="w-full max-w-4xl mb-8">
-          <h2 className="text-xl font-bold mb-4">Your Hand {me.hasExploded && <span className="text-red-500">(EXPLODED)</span>}</h2>
-          <div className="flex flex-wrap gap-4">
-            {me.hand.map((card) => (
-              <div key={card.id} className="bg-gray-800 border border-gray-600 p-4 rounded-lg w-40 flex flex-col items-center shadow-lg">
-                <div className="text-center font-semibold mb-4 text-sm h-10">{card.name}</div>
-                <button 
-                  onClick={() => playCard(card.id)}
-                  disabled={!isMyTurn || me.hasExploded || card.type === 'Defuse'}
-                  className="mt-auto bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold py-2 px-4 rounded w-full transition-colors"
-                >
-                  Play
-                </button>
-              </div>
-            ))}
+  <div className="w-full max-w-4xl mb-8">
+    <h2 className="text-xl font-bold mb-4">Your Hand {me.hasExploded && <span className="text-red-500">(EXPLODED)</span>}</h2>
+    
+    {isInterruptActive && (
+      <div className={`mb-4 p-3 rounded-lg text-center font-bold ${isActionNoped ? 'bg-red-900 text-red-200' : 'bg-yellow-600 text-white'}`}>
+        Interrupt Window Active! 
+        {isActionNoped ? ' Action is currently noped' : ' Play a Nope'}
+      </div>
+    )}
+
+    <div className="flex flex-wrap gap-4">
+      {me.hand.map((card) => {
+        // Only Nope cards are playable during an interrupt
+        const isNopeCard = card.type === 'Nope';
+        const isPlayable = isInterruptActive ? isNopeCard : (isMyTurn && !me.hasExploded && card.type !== 'Defuse');
+        
+        // Highlight Nope cards if the nope window is open
+        const cardStyle = isInterruptActive 
+          ? (isNopeCard ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,1)] border-yellow-300 transform scale-105' : 'bg-gray-800 opacity-30')
+          : 'bg-gray-800 border-gray-600 shadow-lg';
+
+        return (
+          <div key={card.id} className={`border p-4 rounded-lg w-40 flex flex-col items-center transition-all ${cardStyle}`}>
+            <div className="text-center font-semibold mb-4 text-sm h-10">{card.name}</div>
+            <button 
+              onClick={() => playCard(card.id)}
+              disabled={!isPlayable}
+              className="mt-auto bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold py-2 px-4 rounded w-full transition-colors"
+            >
+              Play
+            </button>
           </div>
-        </div>
-      )}
+        );
+      })}
+    </div>
+  </div>
+)}
       
       {/* Network Log */}
       <div className="w-full max-w-4xl bg-gray-800 p-4 rounded-xl shadow-lg min-h-[200px] max-h-[300px] overflow-y-auto">

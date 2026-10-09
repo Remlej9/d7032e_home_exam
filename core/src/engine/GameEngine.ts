@@ -6,6 +6,12 @@ import { IEffectContext, IRandomProvider, IPlayerInput } from '../interfaces/IEf
 import { ICardEffect } from '../expansions/ICardEffect';
 import { DeckFactory } from './DeckFactory';
 
+export type PendingAction = {
+    cardType: string;
+    context: IEffectContext;
+    nopeCount: number;
+  };
+
 export class GameEngine {
   public state: GameState;
   private resolver: ActionResolver;
@@ -14,12 +20,20 @@ export class GameEngine {
   private factory: DeckFactory;
   public hasStarted: boolean = false;
 
-  constructor(random: IRandomProvider, input: IPlayerInput) {
+  private pendingAction: PendingAction | null = null;
+  private interruptTimer: NodeJS.Timeout | null = null;
+  private interruptResolver: ((value: boolean) => void) | null = null;
+
+  // Callback for notifying state changes
+  private onStateChange: (state: any) => void = () => {};
+
+  constructor(random: IRandomProvider, input: IPlayerInput, onStateChange: (state: any) => void) {
     this.state = new GameState([]);
     this.resolver = new ActionResolver();
     this.random = random;
     this.input = input;
     this.factory = new DeckFactory();
+    this.onStateChange = onStateChange;
   }
 
   public startGame(): void {
@@ -110,15 +124,26 @@ export class GameEngine {
   // Play card logic
   public async playCard(playerId: string, cardId: string): Promise<any> {
     const player = this.state.players.find(p => p.id === playerId);
-    if (!player) throw new Error("Player not found");
-    if (this.state.currentPlayer.id !== playerId) throw new Error("Not your turn");
+    const cardIndex = player?.hand.findIndex(c => c.id === cardId) ?? -1;
+    if (!player || cardIndex === -1) throw new Error("Invalid card or player");
 
-    const cardIndex = player.hand.findIndex(c => c.id === cardId);
-    if (cardIndex === -1) throw new Error("Card not found in hand");
-
-    // Remove from hand, add to discard pile
     const card = player.hand.splice(cardIndex, 1)[0];
     this.state.discardPile.push(card);
+
+    // Handle nope cards during activation window
+    if (card.type === 'Nope') {
+      if (!this.pendingAction) {
+        throw new Error("No action to nope");
+      }
+      this.pendingAction.nopeCount++;
+      this.resetInterruptTimer();
+      this.onStateChange(this.getSnapshot());
+      return this.getSnapshot();
+    }
+
+    // Prevent normal cards from being played out of turn or during an interrupt
+    if (this.pendingAction) throw new Error("Wait for the current action to resolve");
+    if (this.state.currentPlayer.id !== playerId) throw new Error("Not your turn");
 
     const context: IEffectContext = {
       state: this.state,
@@ -127,11 +152,43 @@ export class GameEngine {
       input: this.input
     };
 
-    // The resolver handles the specific logic for this card type
-    await this.resolver.playCard(card.type, context);
+    // Initialize the pending action before starting the timer
+    this.pendingAction = { cardType: card.type, context, nopeCount: 0 };
+    this.onStateChange(this.getSnapshot()); // Tell clients the Nope window is open
 
+    const shouldExecute = await this.startInterruptWindow();
+
+    if (shouldExecute) {
+      await this.resolver.playCard(card.type, context);
+    }
+    
+    // Clean up and tell clients the window is closed
+    this.pendingAction = null;
+    this.onStateChange(this.getSnapshot());
+    
     return this.getSnapshot();
   }
+
+  // Handles the 5-second interrupt window for actions
+  private startInterruptWindow(): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.interruptResolver = resolve;
+      this.interruptTimer = setTimeout(() => this.resolveInterrupt(), 5000);
+    });
+  };
+
+  private resetInterruptTimer() {
+    if (this.interruptTimer) clearTimeout(this.interruptTimer);
+    this.interruptTimer = setTimeout(() => this.resolveInterrupt(), 5000);
+  };
+
+  private resolveInterrupt() {
+    if (!this.pendingAction || !this.interruptResolver) return;
+
+    const isCanceled = this.pendingAction.nopeCount % 2 !== 0;
+    this.interruptResolver(!isCanceled);
+    this.interruptResolver = null;
+  };
 
   public getSnapshot() {
     return {
@@ -144,7 +201,11 @@ export class GameEngine {
       discardCount: this.state.discardPile.length,
       currentPlayer: this.state.currentPlayer?.id,
       turnsRemaining: this.state.turnsRemaining,
-      hasStarted: this.hasStarted
+      hasStarted: this.hasStarted,
+      pendingAction: this.pendingAction ? {
+        cardType: this.pendingAction.cardType,
+        nopeCount: this.pendingAction.nopeCount
+      } : null
     };
   }
 }
