@@ -2,7 +2,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { GameEngine, AttackEffect, SkipEffect, ShuffleEffect, SeeTheFutureEffect } from 'exploding-kittens-core'; 
+import { GameEngine, AttackEffect, SkipEffect, ShuffleEffect, SeeTheFutureEffect, FavorEffect } from 'exploding-kittens-core'; 
 
 const app = express();
 const httpServer = createServer(app);
@@ -10,17 +10,42 @@ const io = new Server(httpServer, {
   cors: { origin: "http://localhost:5173", methods: ["GET", "POST"] }
 });
 
+// Track active sockets
+const activeSockets = new Map<string, Socket>();
+
 const serverRandomizer = {
   shuffle: <T>(array: T[]) => array.sort(() => Math.random() - 0.5),
   getRandomInt: (max: number) => Math.floor(Math.random() * max)
 };
 
 const serverInputAdapter = {
-  promptTargetSelection: async (actingPlayerId: string, targets: string[]) => targets[0],
-  promptCardSelection: async (actingPlayerId: string, hand: string[]) => hand[0],
+  // Ask player to pick a target from a list of available targets
+  promptTargetSelection: async (actingPlayerId: string, targets: string[]): Promise<string> => {
+    return new Promise((resolve) => {
+      const socket = activeSockets.get(actingPlayerId);
+      if (!socket) return resolve(targets[0]); // Fallback if disconnected
+
+      socket.emit('promptTargetSelection', targets);
+      socket.once('targetSelected', (targetId: string) => resolve(targetId));
+    });
+  },
+  
+  // Ask player to select a card from their hand
+  promptCardSelection: async (actingPlayerId: string, hand: any[]): Promise<string> => {
+    return new Promise((resolve) => {
+      const socket = activeSockets.get(actingPlayerId);
+      if (!socket) return resolve(hand[0]); // Fallback if disconnected
+
+      socket.emit('promptCardSelection', hand);
+      socket.once('cardSelected', (cardId: string) => resolve(cardId));
+    });
+  },
+
   promptRearrangeCards: async (actingPlayerId: string, cards: string[]) => cards,
   promptDeckInsertion: async (actingPlayerId: string, maxIndex: number) => [0],
   promptActionInterrupt: async (timeoutMs: number) => false,
+
+  // Send a private message to a specific player
   notifyPlayer: async (actingPlayerId: string, message: string, cards?: any[]) => {
     const cardNames = cards ? cards.map(card => card.name).join(', ') : '';
     const fullMessage = cardNames ? `${message} Cards: ${cardNames}` : message;
@@ -42,6 +67,7 @@ engine.registerExpansionCard(new AttackEffect());
 engine.registerExpansionCard(new SkipEffect());
 engine.registerExpansionCard(new ShuffleEffect());
 engine.registerExpansionCard(new SeeTheFutureEffect());
+engine.registerExpansionCard(new FavorEffect());
 
 io.on('connection', (socket) => {
   // Extract the persistent ID provided by the client
@@ -53,7 +79,7 @@ io.on('connection', (socket) => {
   }
 
   socket.join(playerId); // Join a room named after the player ID for private messages
-
+  activeSockets.set(playerId, socket); // Track the active socket
   console.log(`Client connected: ${playerId} (Socket: ${socket.id})`);
 
   // Add player to engine

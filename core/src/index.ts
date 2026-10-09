@@ -13,6 +13,7 @@ export * from './expansions/base/AttackEffect';
 export * from './expansions/base/SkipEffect';
 export * from './expansions/base/ShuffleEffect';
 export * from './expansions/base/SeeTheFutureEffect';
+export * from './expansions/base/FavorEffect';
 
 // Export DeckFactory
 export * from './engine/DeckFactory';
