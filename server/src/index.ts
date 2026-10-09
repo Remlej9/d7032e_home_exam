@@ -2,7 +2,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { GameEngine, AttackEffect, SkipEffect, ShuffleEffect } from 'exploding-kittens-core'; 
+import { GameEngine, AttackEffect, SkipEffect, ShuffleEffect, SeeTheFutureEffect } from 'exploding-kittens-core'; 
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,8 +19,14 @@ const serverInputAdapter = {
   promptTargetSelection: async (actingPlayerId: string, targets: string[]) => targets[0],
   promptCardSelection: async (actingPlayerId: string, hand: string[]) => hand[0],
   promptRearrangeCards: async (actingPlayerId: string, cards: string[]) => cards,
-  promptDeckInstertion: async (actingPlayerId: string, maxIndex: number) => [0],
-  promptActionInterrupt: async (timeoutMs: number) => false
+  promptDeckInsertion: async (actingPlayerId: string, maxIndex: number) => [0],
+  promptActionInterrupt: async (timeoutMs: number) => false,
+  notifyPlayer: async (actingPlayerId: string, message: string, cards?: any[]) => {
+    const cardNames = cards ? cards.map(card => card.name).join(', ') : '';
+    const fullMessage = cardNames ? `${message} Cards: ${cardNames}` : message;
+
+    io.to(actingPlayerId).emit('serverMessage', fullMessage);
+  }
 };
 
 const engine = new GameEngine(serverRandomizer, serverInputAdapter, (state) => {
@@ -35,6 +41,7 @@ const engine = new GameEngine(serverRandomizer, serverInputAdapter, (state) => {
 engine.registerExpansionCard(new AttackEffect());
 engine.registerExpansionCard(new SkipEffect());
 engine.registerExpansionCard(new ShuffleEffect());
+engine.registerExpansionCard(new SeeTheFutureEffect());
 
 io.on('connection', (socket) => {
   // Extract the persistent ID provided by the client
@@ -44,6 +51,8 @@ io.on('connection', (socket) => {
     socket.disconnect();
     return;
   }
+
+  socket.join(playerId); // Join a room named after the player ID for private messages
 
   console.log(`Client connected: ${playerId} (Socket: ${socket.id})`);
 

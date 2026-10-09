@@ -12,6 +12,7 @@ export * from './expansions/ICardEffect';
 export * from './expansions/base/AttackEffect';
 export * from './expansions/base/SkipEffect';
 export * from './expansions/base/ShuffleEffect';
+export * from './expansions/base/SeeTheFutureEffect';
 
 // Export DeckFactory
 export * from './engine/DeckFactory';
