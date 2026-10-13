@@ -17,6 +17,7 @@ export interface IPlayerInput {
   promptDeckInsertion(actingPlayerId: string, maxIndex: number): Promise<number>; // For e.g. placing back the defused kitten
   promptActionInterrupt(timeoutMs: number): Promise<boolean>; // For the 5-second Nope window
   notifyPlayer(actingPlayerId: string, message: string, cards?: any[]): Promise<void>; // Private message to a specific player
+  broadcastMessage(message: string): Promise<void>; // Message all players
 }
 
 export interface IEffectContext {

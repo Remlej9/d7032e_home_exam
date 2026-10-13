@@ -95,7 +95,10 @@ export default function App() {
   }, []);
 
   const startGame = () => socket.emit('startGame');
-  const passTurn = () => socket.emit('passTurn');
+  const passTurn = () => {
+    setSelectedCards([]);
+    socket.emit('passTurn');
+  };
 
   const toggleCardSelection = (cardId: string) => {
     const clickedCard = me?.hand.find(c => c.id === cardId);

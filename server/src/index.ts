@@ -34,7 +34,7 @@ const serverInputAdapter = {
   promptCardSelection: async (actingPlayerId: string, hand: any[]): Promise<string> => {
     return new Promise((resolve) => {
       const socket = activeSockets.get(actingPlayerId);
-      if (!socket) return resolve(hand[0]); // Fallback if disconnected
+      if (!socket) return resolve(hand[0]?.id); // Fallback if disconnected
 
       socket.emit('promptCardSelection', hand);
       socket.once('cardSelected', (cardId: string) => resolve(cardId));
@@ -71,6 +71,10 @@ const serverInputAdapter = {
     const fullMessage = cardNames ? `${message} Cards: ${cardNames}` : message;
 
     io.to(actingPlayerId).emit('serverMessage', fullMessage);
+  },
+
+  broadcastMessage: async (message: string) => {
+    io.emit('serverMessage', message);
   }
 };
 
@@ -108,7 +112,7 @@ io.on('connection', (socket) => {
   const state = engine.addPlayer(playerId);
   
   // Send current state to the connecting client
-  socket.emit('gameState', state);
+  io.emit('gameState', state);
 
   socket.on('startGame', () => {
     try {

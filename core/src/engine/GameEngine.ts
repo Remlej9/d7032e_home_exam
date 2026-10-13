@@ -136,23 +136,29 @@ export class GameEngine {
     const cardIndex = player?.hand.findIndex(c => c.id === cardId) ?? -1;
     if (!player || cardIndex === -1) throw new Error("Invalid card or player");
 
+    const cardType = player.hand[cardIndex].type;
+
+    // Prevent illegal plays before deleting the card from their hand
+    if (cardType === 'Nope') {
+      if (!this.pendingAction) throw new Error("No action to nope");
+    } else {
+      if (this.pendingAction) throw new Error("Wait for the current action to resolve");
+      if (this.state.currentPlayer.id !== playerId) throw new Error("Not your turn");
+    }
+
+    // Mutate state
     const card = player.hand.splice(cardIndex, 1)[0];
     this.state.discardPile.push(card);
 
+    this.onStateChange(this.getSnapshot()); // Notify clients of the card play
+
     // Handle nope cards during activation window
     if (card.type === 'Nope') {
-      if (!this.pendingAction) {
-        throw new Error("No action to nope");
-      }
-      this.pendingAction.nopeCount++;
+      this.pendingAction!.nopeCount++;
       this.resetInterruptTimer();
       this.onStateChange(this.getSnapshot());
       return this.getSnapshot();
     }
-
-    // Prevent normal cards from being played out of turn or during an interrupt
-    if (this.pendingAction) throw new Error("Wait for the current action to resolve");
-    if (this.state.currentPlayer.id !== playerId) throw new Error("Not your turn");
 
     const context: IEffectContext = {
       state: this.state,
@@ -161,19 +167,31 @@ export class GameEngine {
       input: this.input
     };
 
+    // Prepare the card's effect and check if it can be executed
+    const payload = await this.resolver.prepareCard(card.type, context);
+    if (payload === null) {
+      // If prepare returns null, abort
+      return this.getSnapshot();
+    }
+
     // Initialize the pending action before starting the timer
     this.pendingAction = { cardType: card.type, context, nopeCount: 0 };
     this.onStateChange(this.getSnapshot()); // Tell clients the Nope window is open
 
     const shouldExecute = await this.startInterruptWindow();
 
+    // Clear the pending action after the Nope window resolves
+    this.pendingAction = null;
+    this.onStateChange(this.getSnapshot());
+
+    // Execute the card's effect or handle the Nope response
     try {
       if (shouldExecute) {
-        await this.resolver.playCard(card.type, context);
+        await this.resolver.executeCard(card.type, context, payload);
+      } else {
+        await this.input.broadcastMessage(`The ${card.type} was NOPED!`);
       }
     } finally {
-      // Clean up and notify clients that the window is closed
-      this.pendingAction = null;
       this.onStateChange(this.getSnapshot());
     }
     
@@ -185,46 +203,57 @@ export class GameEngine {
     const player = this.state.players.find(p => p.id === playerId);
     if (!player) throw new Error("Invalid player");
 
-    // Extract the cards from the player's hand
+    // Check for pending actions and turn validity
+    if (this.pendingAction) throw new Error("Wait for the current action to resolve");
+    if (this.state.currentPlayer.id !== playerId) throw new Error("Not your turn");
+
     const cardsToPlay = cardIds.map(id => player.hand.find(c => c.id === id)).filter(Boolean) as Card[];
     if (cardsToPlay.length !== cardIds.length) throw new Error("Invalid card selection");
 
-    // Verify that all cards are of the same type for a combo
     const isMatchingCombo = cardsToPlay.every(c => c.type === cardsToPlay[0].type);
     if (!isMatchingCombo) throw new Error("Cards must match for a combo");
 
-    // Remove cards from the player's hand and add them to the discard pile
+    // Mutate state
     cardsToPlay.forEach(card => {
       const idx = player.hand.findIndex(c => c.id === card.id);
       this.state.discardPile.push(player.hand.splice(idx, 1)[0]);
     });
 
+    this.onStateChange(this.getSnapshot()); // Notify clients of the card play
+
     const context: IEffectContext = {state: this.state, actingPlayerId: playerId, random: this.random, input: this.input};
 
-    // Route to correct combo handler based on the number of cards played
     let ComboType = '';
     switch (cardsToPlay.length) {
-      case 2:
-        ComboType = 'TwoOfAKind';
-        break;
-      case 3:
-        ComboType = 'ThreeOfAKind';
-        break;
-      default:
-        throw new Error("Unsupported combo size");
+      case 2: ComboType = 'TwoOfAKind'; break;
+      case 3: ComboType = 'ThreeOfAKind'; break;
+      default: throw new Error("Unsupported combo size");
     }
 
+    // Prepare the combo effect and check if it can be executed
+    const payload = await this.resolver.prepareCard(ComboType, context);
+    if (payload === null) {
+      return this.getSnapshot();
+    }
+
+    // Initialize the pending action before starting the timer
     this.pendingAction = { cardType: ComboType, context, nopeCount: 0 };
-    this.onStateChange(this.getSnapshot()); // Notify clients of the Nope window
+    this.onStateChange(this.getSnapshot());
 
     const shouldExecute = await this.startInterruptWindow();
+
+    // Clear the pending action after the Nope window resolves
+    this.pendingAction = null;
+    this.onStateChange(this.getSnapshot());
+    
+    // Execute the combo effect or handle the Nope response
     try {
       if (shouldExecute) {
-        await this.resolver.playCard(ComboType, context);
+        await this.resolver.executeCard(ComboType, context, payload);
+      } else {
+        await this.input.broadcastMessage(`The ${ComboType} was NOPED!`);
       }
     } finally {
-      // Clean up and notify clients that the window is closed
-      this.pendingAction = null;
       this.onStateChange(this.getSnapshot());
     }
 
