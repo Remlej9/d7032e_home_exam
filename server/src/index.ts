@@ -51,7 +51,7 @@ const serverInputAdapter = {
       socket.once('deckInsertionSelected', (index: number) => resolve(index));
     });
   },
-  
+
   promptActionInterrupt: async (timeoutMs: number) => false,
 
   // Send a private message to a specific player
@@ -120,6 +120,15 @@ io.on('connection', (socket) => {
   socket.on('playCard', async (cardId: string) => {
     try {
       const newState = await engine.playCard(playerId, cardId);
+      io.emit('gameState', newState);
+    } catch (e: any) {
+      socket.emit('serverMessage', `Error: ${e.message}`);
+    }
+  });
+
+  socket.on('playCombo', async (cardIds: string[]) => {
+    try {
+      const newState = await engine.playCombo(playerId, cardIds);
       io.emit('gameState', newState);
     } catch (e: any) {
       socket.emit('serverMessage', `Error: ${e.message}`);

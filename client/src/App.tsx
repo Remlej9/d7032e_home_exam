@@ -51,6 +51,9 @@ export default function App() {
   const [deckInsertionMax, setDeckInsertionMax] = useState<number | null>(null);
   const [insertionSliderValue, setInsertionSliderValue] = useState<number>(0);
 
+  // Track selected cards for combo plays
+  const [selectedCards, setSelectedCards] = useState<string[]>([]);
+
   // Initialize state directly with the persistent ID
   const [myId] = useState<string>(persistentId);
 
@@ -87,7 +90,40 @@ export default function App() {
 
   const startGame = () => socket.emit('startGame');
   const passTurn = () => socket.emit('passTurn');
-  const playCard = (cardId: string) => socket.emit('playCard', cardId);
+
+  const toggleCardSelection = (cardId: string) => {
+    const clickedCard = me?.hand.find(c => c.id === cardId);
+    if (!clickedCard) return;
+
+    setSelectedCards(prev => {
+      // Deselect if already selected
+      if (prev.includes(cardId)) {
+        return prev.filter(id => id !== cardId);
+      }
+
+      // If nothing is selected, start a new selection
+      if (prev.length === 0) {
+        return [cardId];
+      }
+
+      // If something is selected, check if the types match for a combo
+      const firstSelectedCard = me?.hand.find(c => c.id === prev[0]);
+      if (firstSelectedCard && firstSelectedCard.name === clickedCard.name) {
+        return [...prev, cardId]; // Add to combo
+      } else {
+        return [cardId]; // Replace selection with the new card type
+      }
+    });
+  };
+
+  const executePlay = () => {
+    if (selectedCards.length === 1) {
+      socket.emit('playCard', selectedCards[0]);
+    } else if (selectedCards.length > 1) {
+      socket.emit('playCombo', selectedCards);
+    }
+    setSelectedCards([]);
+  };
 
   const selectTarget = (targetId: string) => {
     socket.emit('targetSelected', targetId);
@@ -225,7 +261,22 @@ export default function App() {
       {/* Player Hand */}
       {gameState.hasStarted && me && (
         <div className="w-full max-w-4xl mb-8">
-          <h2 className="text-xl font-bold mb-4">Your Hand {me.hasExploded && <span className="text-red-500">(EXPLODED)</span>}</h2>
+          <div className="flex justify-between items-center mb-4 h-12">
+            <h2 className="text-xl font-bold">Your Hand {me.hasExploded && <span className="text-red-500">(EXPLODED)</span>}</h2>
+            
+            {/* Dynamic Master Action Button */}
+            {selectedCards.length > 0 && !isInterruptActive && (
+              <button 
+                onClick={executePlay}
+                className="bg-green-500 hover:bg-green-400 text-black font-bold py-2 px-6 rounded-lg shadow-[0_0_15px_rgba(34,197,94,0.5)] transition-all"
+              >
+                {selectedCards.length === 1 
+                  ? `Play ${me.hand.find(c => c.id === selectedCards[0])?.name}` 
+                  : `Play ${selectedCards.length}-Card Combo`
+                }
+              </button>
+            )}
+          </div>
           
           {isInterruptActive && (
             <div className={`mb-4 p-3 rounded-lg text-center font-bold ${isActionNoped ? 'bg-red-900 text-red-200' : 'bg-yellow-600 text-white'}`}>
@@ -234,33 +285,55 @@ export default function App() {
             </div>
           )}
 
-            <div className="flex flex-wrap gap-4">
-              {me.hand.map((card) => {
-                // Only Nope cards are playable during an interrupt
-                const isNopeCard = card.type === 'Nope';
-                const isPlayable = isInterruptActive ? isNopeCard : (isMyTurn && !me.hasExploded && card.type !== 'Defuse');
-                
-                // Highlight Nope cards if the nope window is open
-                const cardStyle = isInterruptActive 
-                  ? (isNopeCard ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,1)] border-yellow-300 transform scale-105' : 'bg-gray-800 opacity-30')
-                  : 'bg-gray-800 border-gray-600 shadow-lg';
+          <div className="flex flex-wrap gap-4">
+            {me.hand.map((card) => {
+              const isNopeCard = card.type === 'Nope';
+              const isPlayable = isInterruptActive ? isNopeCard : (isMyTurn && !me.hasExploded && card.type !== 'Defuse');
+              const isSelected = selectedCards.includes(card.id);
 
-                return (
-                  <div key={card.id} className={`border p-4 rounded-lg w-40 flex flex-col items-center transition-all ${cardStyle}`}>
-                    <div className="text-center font-semibold mb-4 text-sm h-10">{card.name}</div>
-                    <button 
-                      onClick={() => playCard(card.id)}
-                      disabled={!isPlayable}
-                      className="mt-auto bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold py-2 px-4 rounded w-full transition-colors"
-                    >
-                      Play
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+              const firstSelected = selectedCards.length > 0 
+                ? me.hand.find(c => c.id === selectedCards[0]) 
+                : null;
+              
+              // Determine combo highlighting states
+              const activeSelectionName = firstSelected?.name;
+
+              const isMatchable = activeSelectionName && card.name === activeSelectionName && !isSelected;
+              const isUnmatchable = activeSelectionName && card.name !== activeSelectionName;
+
+              // Base styling + Selection Highlighting
+              let cardStyle = 'bg-gray-800 border-gray-600 shadow-lg cursor-pointer hover:bg-gray-700';
+              
+              if (isSelected) {
+                cardStyle = 'bg-indigo-900 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.6)] transform -translate-y-2';
+              } else if (isMatchable) {
+                cardStyle = 'bg-gray-700 border-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.3)] cursor-pointer'; 
+              } else if (isUnmatchable) {
+                cardStyle = 'bg-gray-900 border-gray-800 opacity-40 cursor-pointer'; 
+              }
+              
+              if (isInterruptActive) {
+                cardStyle = isNopeCard 
+                  ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,1)] border-yellow-300 transform scale-105 cursor-pointer' 
+                  : 'bg-gray-800 opacity-30 cursor-not-allowed';
+              }
+
+              return (
+                <div 
+                  key={card.id} 
+                  onClick={() => {
+                    if (isPlayable) toggleCardSelection(card.id);
+                    if (isInterruptActive && isNopeCard) socket.emit('playCard', card.id);
+                  }}
+                  className={`border p-4 rounded-lg w-32 flex flex-col items-center transition-all select-none ${cardStyle}`}
+                >
+                  <div className="text-center font-semibold mb-2 text-sm h-12 flex items-center">{card.name}</div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
+      )}
       
       {/* Network Log */}
       <div className="w-full max-w-4xl bg-gray-800 p-4 rounded-xl shadow-lg min-h-[200px] max-h-[300px] overflow-y-auto">

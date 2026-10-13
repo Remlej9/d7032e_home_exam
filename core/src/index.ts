@@ -14,6 +14,7 @@ export * from './expansions/base/SkipEffect';
 export * from './expansions/base/ShuffleEffect';
 export * from './expansions/base/SeeTheFutureEffect';
 export * from './expansions/base/FavorEffect';
+export * from './expansions/base/TwoOfAKindEffect';
 
 // Export DeckFactory
 export * from './engine/DeckFactory';

@@ -178,6 +178,55 @@ export class GameEngine {
     return this.getSnapshot();
   }
 
+  // Play card combos, 2 of a kind, 3 of a kind, etc.
+  public async playCombo(playerId: string, cardIds: string[]): Promise<any> {
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!player) throw new Error("Invalid player");
+
+    // Extract the cards from the player's hand
+    const cardsToPlay = cardIds.map(id => player.hand.find(c => c.id === id)).filter(Boolean) as Card[];
+    if (cardsToPlay.length !== cardIds.length) throw new Error("Invalid card selection");
+
+    // Verify that all cards are of the same type for a combo
+    const isMatchingCombo = cardsToPlay.every(c => c.type === cardsToPlay[0].type);
+    if (!isMatchingCombo) throw new Error("Cards must match for a combo");
+
+    // Remove cards from the player's hand and add them to the discard pile
+    cardsToPlay.forEach(card => {
+      const idx = player.hand.findIndex(c => c.id === card.id);
+      this.state.discardPile.push(player.hand.splice(idx, 1)[0]);
+    });
+
+    const context: IEffectContext = {state: this.state, actingPlayerId: playerId, random: this.random, input: this.input};
+
+    // Route to correct combo handler based on the number of cards played
+    let ComboType = '';
+    switch (cardsToPlay.length) {
+      case 2:
+        ComboType = 'TwoOfAKind';
+        break;
+      case 3:
+        ComboType = 'ThreeOfAKind';
+        break;
+      default:
+        throw new Error("Unsupported combo size");
+    }
+
+    this.pendingAction = { cardType: ComboType, context, nopeCount: 0 };
+    this.onStateChange(this.getSnapshot()); // Notify clients of the Nope window
+
+    const shouldExecute = await this.startInterruptWindow();
+    if (shouldExecute) {
+      await this.resolver.playCard(ComboType, context);
+    }
+
+    // Clean up and notify clients that the window is closed
+    this.pendingAction = null;
+    this.onStateChange(this.getSnapshot());
+
+    return this.getSnapshot();
+  };
+
   // Handles the 5-second interrupt window for actions
   private startInterruptWindow(): Promise<boolean> {
     return new Promise((resolve) => {
