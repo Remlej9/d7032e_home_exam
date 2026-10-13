@@ -11,7 +11,8 @@ export interface IRandomProvider {
 // Decouples game logic from network/terminal
 export interface IPlayerInput {
   promptTargetSelection(actingPlayerId: string, availableTargets: string[]): Promise<string>;
-  promptCardSelection(actingPlayerId: string, hand: Card[]): Promise<string>;
+  promptCardSelection(actingPlayerId: string, hand: Card[]): Promise<string>; // For Favor
+  promptCardTypeSelection(actingPlayerId: string, availableTypes: string[]): Promise<string>; // For e.g. Two of a Kind, Three of a Kind
   promptRearrangeCards(actingPlayerId: string, cards: string[]): Promise<string[]>; // For e.g Alter the future
   promptDeckInsertion(actingPlayerId: string, maxIndex: number): Promise<number>; // For e.g. placing back the defused kitten
   promptActionInterrupt(timeoutMs: number): Promise<boolean>; // For the 5-second Nope window

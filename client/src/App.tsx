@@ -47,6 +47,7 @@ export default function App() {
 
   const [targetOptions, setTargetOptions] = useState<string[] | null>(null);
   const [cardOptions, setCardOptions] = useState<Card[] | null>(null);
+  const [cardTypeOptions, setCardTypeOptions] = useState<string[] | null>(null);
 
   const [deckInsertionMax, setDeckInsertionMax] = useState<number | null>(null);
   const [insertionSliderValue, setInsertionSliderValue] = useState<number>(0);
@@ -74,6 +75,10 @@ export default function App() {
       setCardOptions(hand);
     });
 
+    socket.on('promptCardTypeSelection', (types: string[]) => {
+      setCardTypeOptions(types);
+    });
+
     socket.on('promptDeckInsertion', (maxIndex: number) => {
       setDeckInsertionMax(maxIndex);
       setInsertionSliderValue(0);
@@ -84,6 +89,7 @@ export default function App() {
       socket.off('gameState');
       socket.off('promptTargetSelection');
       socket.off('promptCardSelection')
+      socket.off('promptCardTypeSelection');
       socket.off('promptDeckInsertion');
     };
   }, []);
@@ -133,6 +139,11 @@ export default function App() {
   const selectCardToGive = (cardId: string) => {
     socket.emit('cardSelected', cardId);
     setCardOptions(null);
+  };
+
+  const selectCardType = (type: string) => {
+    socket.emit('cardTypeSelected', type);
+    setCardTypeOptions(null);
   };
 
   const selectDeckInsertion = (index: number) => {
@@ -228,6 +239,23 @@ export default function App() {
         </div>
       )}
 
+      {cardTypeOptions && (
+        <div className="w-full max-w-4xl mb-8 p-6 bg-purple-900 border-2 border-purple-500 rounded-xl shadow-2xl flex flex-col items-center">
+          <h2 className="text-xl font-bold mb-4 text-white">Name a card type to steal:</h2>
+          <div className="flex flex-wrap gap-4 justify-center">
+            {cardTypeOptions.map(type => (
+              <button 
+                key={type} 
+                onClick={() => selectCardType(type)}
+                className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md"
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {deckInsertionMax !== null && (
         <div className="w-full max-w-4xl mb-8 p-6 bg-red-900 border-2 border-red-500 rounded-xl shadow-2xl flex flex-col items-center">
           <h2 className="text-xl font-bold mb-6 text-white">You Defused the Kitten! Where do you want to hide it?</h2>
@@ -301,7 +329,7 @@ export default function App() {
               const isMatchable = activeSelectionName && card.name === activeSelectionName && !isSelected;
               const isUnmatchable = activeSelectionName && card.name !== activeSelectionName;
 
-              // Base styling + Selection Highlighting
+              // Selection Highlighting
               let cardStyle = 'bg-gray-800 border-gray-600 shadow-lg cursor-pointer hover:bg-gray-700';
               
               if (isSelected) {

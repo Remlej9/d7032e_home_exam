@@ -2,7 +2,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { GameEngine, AttackEffect, SkipEffect, ShuffleEffect, SeeTheFutureEffect, FavorEffect } from 'exploding-kittens-core'; 
+import { GameEngine, AttackEffect, SkipEffect, ShuffleEffect, SeeTheFutureEffect, FavorEffect, TwoOfAKindEffect, ThreeOfAKindEffect } from 'exploding-kittens-core'; 
 
 const app = express();
 const httpServer = createServer(app);
@@ -38,6 +38,17 @@ const serverInputAdapter = {
 
       socket.emit('promptCardSelection', hand);
       socket.once('cardSelected', (cardId: string) => resolve(cardId));
+    });
+  },
+
+  // Ask player to select a card type from a list of available types
+  promptCardTypeSelection: async (actingPlayerId: string, types: string[]): Promise<string> => {
+    return new Promise((resolve) => {
+      const socket = activeSockets.get(actingPlayerId);
+      if (!socket) return resolve(types[0]); // Fallback if disconnected
+
+      socket.emit('promptCardTypeSelection', types);
+      socket.once('cardTypeSelected', (type: string) => resolve(type));
     });
   },
 
@@ -77,6 +88,8 @@ engine.registerExpansionCard(new SkipEffect());
 engine.registerExpansionCard(new ShuffleEffect());
 engine.registerExpansionCard(new SeeTheFutureEffect());
 engine.registerExpansionCard(new FavorEffect());
+engine.registerExpansionCard(new TwoOfAKindEffect());
+engine.registerExpansionCard(new ThreeOfAKindEffect());
 
 io.on('connection', (socket) => {
   // Extract the persistent ID provided by the client

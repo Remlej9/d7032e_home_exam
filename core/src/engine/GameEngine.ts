@@ -167,13 +167,15 @@ export class GameEngine {
 
     const shouldExecute = await this.startInterruptWindow();
 
-    if (shouldExecute) {
-      await this.resolver.playCard(card.type, context);
+    try {
+      if (shouldExecute) {
+        await this.resolver.playCard(card.type, context);
+      }
+    } finally {
+      // Clean up and notify clients that the window is closed
+      this.pendingAction = null;
+      this.onStateChange(this.getSnapshot());
     }
-    
-    // Clean up and tell clients the window is closed
-    this.pendingAction = null;
-    this.onStateChange(this.getSnapshot());
     
     return this.getSnapshot();
   }
@@ -216,13 +218,15 @@ export class GameEngine {
     this.onStateChange(this.getSnapshot()); // Notify clients of the Nope window
 
     const shouldExecute = await this.startInterruptWindow();
-    if (shouldExecute) {
-      await this.resolver.playCard(ComboType, context);
+    try {
+      if (shouldExecute) {
+        await this.resolver.playCard(ComboType, context);
+      }
+    } finally {
+      // Clean up and notify clients that the window is closed
+      this.pendingAction = null;
+      this.onStateChange(this.getSnapshot());
     }
-
-    // Clean up and notify clients that the window is closed
-    this.pendingAction = null;
-    this.onStateChange(this.getSnapshot());
 
     return this.getSnapshot();
   };
