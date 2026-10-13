@@ -48,6 +48,9 @@ export default function App() {
   const [targetOptions, setTargetOptions] = useState<string[] | null>(null);
   const [cardOptions, setCardOptions] = useState<Card[] | null>(null);
 
+  const [deckInsertionMax, setDeckInsertionMax] = useState<number | null>(null);
+  const [insertionSliderValue, setInsertionSliderValue] = useState<number>(0);
+
   // Initialize state directly with the persistent ID
   const [myId] = useState<string>(persistentId);
 
@@ -68,11 +71,17 @@ export default function App() {
       setCardOptions(hand);
     });
 
+    socket.on('promptDeckInsertion', (maxIndex: number) => {
+      setDeckInsertionMax(maxIndex);
+      setInsertionSliderValue(0);
+    });
+
     return () => {
       socket.off('serverMessage');
       socket.off('gameState');
       socket.off('promptTargetSelection');
       socket.off('promptCardSelection')
+      socket.off('promptDeckInsertion');
     };
   }, []);
 
@@ -88,6 +97,11 @@ export default function App() {
   const selectCardToGive = (cardId: string) => {
     socket.emit('cardSelected', cardId);
     setCardOptions(null);
+  };
+
+  const selectDeckInsertion = (index: number) => {
+    socket.emit('deckInsertionSelected', index);
+    setDeckInsertionMax(null);
   };
 
   if (!gameState) return <div className="p-8 text-white">Connecting to server...</div>;
@@ -174,6 +188,36 @@ export default function App() {
                 {card.name}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {deckInsertionMax !== null && (
+        <div className="w-full max-w-4xl mb-8 p-6 bg-red-900 border-2 border-red-500 rounded-xl shadow-2xl flex flex-col items-center">
+          <h2 className="text-xl font-bold mb-6 text-white">You Defused the Kitten! Where do you want to hide it?</h2>
+          
+          <div className="w-full max-w-md flex flex-col items-center gap-4">
+            <div className="flex justify-between w-full text-red-200 font-bold text-sm">
+              <span>Top (0)</span>
+              <span>Position: {insertionSliderValue}</span>
+              <span>Bottom ({deckInsertionMax})</span>
+            </div>
+            
+            <input 
+              type="range" 
+              min="0" 
+              max={deckInsertionMax} 
+              value={insertionSliderValue}
+              onChange={(e) => setInsertionSliderValue(Number(e.target.value))}
+              className="w-full h-3 bg-red-950 rounded-lg appearance-none cursor-pointer accent-red-500"
+            />
+
+            <button 
+              onClick={() => selectDeckInsertion(insertionSliderValue)} 
+              className="mt-4 bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-colors"
+            >
+              Confirm Placement
+            </button>
           </div>
         </div>
       )}

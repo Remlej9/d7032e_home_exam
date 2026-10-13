@@ -42,7 +42,16 @@ const serverInputAdapter = {
   },
 
   promptRearrangeCards: async (actingPlayerId: string, cards: string[]) => cards,
-  promptDeckInsertion: async (actingPlayerId: string, maxIndex: number) => [0],
+  promptDeckInsertion: async (actingPlayerId: string, maxIndex: number): Promise<number> => {
+    return new Promise((resolve) => {
+      const socket = activeSockets.get(actingPlayerId);
+      if (!socket) return resolve(0); // Fallback if disconnected
+          
+      socket.emit('promptDeckInsertion', maxIndex);
+      socket.once('deckInsertionSelected', (index: number) => resolve(index));
+    });
+  },
+  
   promptActionInterrupt: async (timeoutMs: number) => false,
 
   // Send a private message to a specific player

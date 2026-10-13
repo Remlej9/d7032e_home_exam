@@ -66,6 +66,8 @@ export class GameEngine {
     // Final shuffle
     this.state.drawPile = this.random.shuffle(deck);
 
+    console.log(this.state.drawPile.map(c => c.type));
+
     // Random player goes first
     this.state.currentPlayerIndex = this.random.getRandomInt(this.state.players.length);
     this.hasStarted = true;
@@ -85,12 +87,19 @@ export class GameEngine {
       const defuseIndex = player.hand.findIndex(c => c.type === 'Defuse');
       
       if (defuseIndex !== -1) {
+        console.log(`Player ${player.id} drew an Exploding Kitten but has a Defuse card.`);
         // Player has a defuse
         const defuseCard = player.hand.splice(defuseIndex, 1)[0];
         this.state.discardPile.push(defuseCard);
+
+        this.onStateChange(this.getSnapshot());
+
+        // Ask player where they want to place the Exploding Kitten back into the draw pile
+        const insertionDepth = await this.input.promptDeckInsertion!(player.id, this.state.drawPile.length);
         
-        // TÓDO: Let player place Exploding kitten back wherever they want
-        this.state.drawPile.unshift(drawnCard);
+        const arrayIndex = this.state.drawPile.length - insertionDepth;
+        this.state.drawPile.splice(arrayIndex, 0, drawnCard);
+
       } else {
         // Player explodes
         player.hasExploded = true;
