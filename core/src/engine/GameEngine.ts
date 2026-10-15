@@ -66,7 +66,7 @@ export class GameEngine {
     // Final shuffle
     this.state.drawPile = this.random.shuffle(deck);
 
-    console.log(this.state.drawPile.map(c => c.type));
+    //console.log(this.state.drawPile.map(c => c.type));
 
     // Random player goes first
     this.state.currentPlayerIndex = this.random.getRandomInt(this.state.players.length);
@@ -106,6 +106,12 @@ export class GameEngine {
         this.state.discardPile.push(drawnCard);
         this.state.discardPile.push(...player.hand);
         player.hand = [];
+
+        // If only one player remains, the game is over, broadcast the winner
+        if (this.state.isGameOver) {
+          const winner = this.state.activePlayers[0];
+          await this.input.broadcastMessage(`Game Over! Player ${winner.id} has won the game!`);
+        }
       }
     } else {
       // Normal card drawn

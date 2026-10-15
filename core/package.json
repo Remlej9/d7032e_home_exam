@@ -5,7 +5,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "watch": "tsc -w"
+    "watch": "tsc -w",
+    "test": "jest"
   },
   "dependencies": {
     "uuid": "^14.0.2"
@@ -15,6 +16,6 @@
     "@types/uuid": "^10.0.0",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.14",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3"
   }
 }
